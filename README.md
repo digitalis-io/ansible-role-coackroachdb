@@ -25,12 +25,6 @@ Including an example of how to use your role (for instance, with variables passe
   gather_facts: true
   any_errors_fatal: true
 
-  handlers:
-    - name: reload ssh
-      ansible.builtin.systemd:
-        name: sshd
-        state: restarted
-
   roles:
     - name: ar-cockroachdb
 ```
@@ -38,7 +32,7 @@ Including an example of how to use your role (for instance, with variables passe
 License
 -------
 
-BSD
+Apache
 
 Author Information
 ------------------
