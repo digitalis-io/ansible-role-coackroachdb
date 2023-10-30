@@ -1,0 +1,18 @@
+---
+- name: Ensure PostgreSQL users are present.
+  community.postgresql.postgresql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | default(omit) }}"
+    login_host: "{{ item.login_host | default('localhost') }}"
+    login_password: "{{ item.login_password | default(omit) }}"
+    login_user: "{{ item.login_user | default(postgresql_user) }}"
+    port: "{{ item.port | default(omit) }}"
+    ca_cert: "{{ item.ca_cert | default(omit) }}"
+    db: "{{ item.db | default('postgres') }}"
+  with_items: "{{ cockroachdb_users }}"
+  become: true
+  tags: users
+  vars:
+    ansible_ssh_pipelining: true
+
+# code: language=ansible

@@ -1,0 +1,32 @@
+[Unit]
+Description=Cockroach Database cluster node
+Requires=network.target
+[Service]
+Type=notify
+WorkingDirectory={{ cockroachdb_data_dir }}
+ExecStart={{ cockroachdb_root_dir }}/cockroachdb/cockroach \
+        --advertise-addr={{ ansible_hostname }} --cache=.25 --max-sql-memory=.25 --http-addr {{ cockroachdb_api_address }} \
+{% if cockroachdb_nodes | length > 0 %}
+        start --join={{ cockroachdb_nodes | join(",") }} \
+{% elif cockroachdb_nodes_group | length > 0 %}
+        start --join {% for node in cockroachdb_nodes_group %}"{{ hostvars[node].ansible_hostname }}.dev.exchange.tokenise.host:26257"{{ "," if not loop.last else "" }}{% endfor %} \
+{% else %}
+        start-single-node \
+{% endif %}
+{% if cockroachdb_certs_directory != "" %}
+        --certs-dir {{ cockroachdb_certs_directory }} \
+{% else %}
+        --insecure \
+{% endif %}
+        --cluster-name {{ cockroachdb_cluster_name }} \
+        --advertise-addr={{ ansible_hostname }} --cache=.25 --max-sql-memory=.25 --http-addr {{ cockroachdb_api_address }}
+
+TimeoutStopSec=300
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=cockroach
+User={{ cockroachdb_user }}
+[Install]
+WantedBy=default.target

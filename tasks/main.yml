@@ -1,0 +1,129 @@
+---
+- name: Prereqs
+  ansible.builtin.package:
+    name:
+      - python3-cryptography
+      - python3-psycopg2
+
+- name: Create cockroachdb group
+  ansible.builtin.group:
+    name: "{{ cockroachdb_group }}"
+    gid: "{{ cockroachdb_group_id }}"
+
+- name: Create cockroachdb user
+  ansible.builtin.user:
+    name: "{{ cockroachdb_user }}"
+    group: "{{ cockroachdb_group }}"
+    uid: "{{ cockroachdb_user_id }}"
+    shell: /bin/bash
+    home: /home/cockroachdb
+
+- name: Create parent directory
+  ansible.builtin.file:
+    state: directory
+    path: "{{ cockroachdb_root_dir }}"
+    mode: "0755"
+
+- name: Create data directory
+  ansible.builtin.file:
+    state: directory
+    path: "{{ cockroachdb_data_dir }}"
+    mode: "0750"
+    owner: "{{ cockroachdb_user }}"
+    group: "{{ cockroachdb_group }}"
+
+- name: Download and install
+  block:
+    - name: Cockroachdb
+      ansible.builtin.unarchive:
+        src: "{{ cockroachdb_download_url }}"
+        dest: "{{ cockroachdb_root_dir }}"
+        remote_src: true
+
+    - name: Cockroachdb SQL
+      ansible.builtin.unarchive:
+        src: "{{ cockroarchdb_sql_download_url }}"
+        dest: "{{ cockroachdb_root_dir }}"
+        remote_src: true
+
+    - name: Create symlink
+      ansible.builtin.file:
+        state: link
+        src: "{{ cockroachdb_root_dir }}/cockroach-v{{ cockroachdb_version }}.linux-amd64"
+        dest: "{{ cockroachdb_root_dir }}/cockroachdb"
+
+    - name: Create symlink
+      ansible.builtin.file:
+        state: link
+        src: "{{ cockroachdb_root_dir }}/cockroach-sql-v{{ cockroachdb_version }}.linux-amd64"
+        dest: "{{ cockroachdb_root_dir }}/cockroachdb-sql"
+
+- name: Create self signed certs
+  ansible.builtin.import_tasks: _ssl.yml
+  when:
+    - cockroachdb_self_signed_certs is defined
+    - cockroachdb_self_signed_certs
+    - cockroachdb_certs_directory is defined
+    - cockroachdb_certs_directory != ""
+  tags: ssl
+
+- name: Install systemd
+  ansible.builtin.template:
+    src: templates/systemd.conf.j2
+    dest: /etc/systemd/system/cockroachdb.service
+    mode: "0644"
+  notify: reload systemd
+  tags: systemd
+
+- name: Start
+  ansible.builtin.systemd:
+    state: started
+    enabled: true
+    name: cockroachdb
+  notify: reload cockroachdb
+
+- name: Profile
+  ansible.builtin.copy:
+    dest: /etc/profile.d/cockroachdb.sh
+    mode: "0644"
+    content: |
+      PATH=$PATH:{{ cockroachdb_root_dir }}/cockroachdb:{{ cockroachdb_root_dir }}/cockroachdb-sql
+
+- name: Init DB
+  tags: init
+  ansible.builtin.shell: |
+    #!/bin/bash
+    if [[ ! -f /root/.db_init ]]; then
+      {{ cockroachdb_root_dir }}/cockroachdb/cockroach init \
+        --certs-dir {{ cockroachdb_certs_directory }} \
+        --cluster-name {{ cockroachdb_cluster_name }} \
+        --host {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}
+      date > /root/.db_init
+    fi
+  when: ca_node == hostvars[inventory_hostname]['ansible_default_ipv4']['address']
+
+- name: Create admin user
+  tags: users
+  ansible.builtin.shell: |
+    #!/bin/bash
+    {{ cockroachdb_root_dir }}/cockroachdb-sql/cockroach-sql -d postgres --certs-dir {{ cockroachdb_certs_directory }} \
+      --url postgresql://{{ ansible_fqdn }} \
+      -e "CREATE USER IF NOT EXISTS {{ cockroachdb_admin_user }} WITH CREATEDB CREATEROLE CREATELOGIN PASSWORD '{{ cockroachdb_admin_password }}'"
+  run_once: true
+  delegate_to: "{{ ca_node }}"
+
+- name: Create users
+  ansible.builtin.import_tasks: users.yml
+  tags: users
+  vars:
+    cockroachdb_users:
+      - name: "joeblocks"
+        password: "changeme"
+        login_host: "{{ ca_node }}"
+        login_password: "{{ cockroachdb_admin_password }}"
+        login_user: "{{ cockroachdb_admin_user }}"
+        port: 26257
+  delegate_to: "{{ ca_node }}"
+  run_once: true
+
+# code: language=ansible

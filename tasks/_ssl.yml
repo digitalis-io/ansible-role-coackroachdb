@@ -1,0 +1,87 @@
+- name: Select a node to host the CA (not to be used in production)
+  ansible.builtin.set_fact:
+    ca_node: "{{ hostvars[cockroachdb_nodes_group[0]].ansible_all_ipv4_addresses[0] }}"
+  when:
+    - ca_node is not defined
+    - cockroachdb_nodes | length > 0
+
+- name: Select a node to host the CA (not to be used in production)
+  ansible.builtin.set_fact:
+    ca_node: "{{ cockroachdb_nodes_group[0] }}"
+  when:
+    - ca_node is not defined
+
+- name: Ensure the certificates directory exists
+  ansible.builtin.file:
+    state: directory
+    path: "{{ cockroachdb_certs_directory }}"
+    mode: "0750"
+    owner: "{{ cockroachdb_user }}"
+    group: "{{ cockroachdb_group }}"
+
+- name: Create certs for all the nodes
+  ansible.builtin.shell: |
+    #!/bin/bash
+    [ -f {{ cockroachdb_certs_directory }}/root.ca ] || \
+      {{ cockroachdb_root_dir }}/cockroachdb/cockroach cert create-ca --certs-dir={{ cockroachdb_certs_directory }} \
+      --ca-key={{ cockroachdb_certs_directory }}/root.ca
+    {% for node in cockroachdb_nodes_group %}
+    if [[ ! -f {{ cockroachdb_certs_directory }}/nodes/{{ hostvars[node].ansible_hostname }}/node.crt ]]; then
+      mkdir -p "{{ cockroachdb_certs_directory }}/nodes/{{ hostvars[node].ansible_hostname }}"
+      {{ cockroachdb_root_dir }}/cockroachdb/cockroach cert create-node \
+        {{ hostvars[node].ansible_hostname }} {{ hostvars[node].inventory_hostname }} \
+        {{ hostvars[node].ansible_nodename }} {{ hostvars[node].ansible_fqdn }} \
+        {{ hostvars[node]['ansible_default_ipv4']['address'] }} \
+        --certs-dir={{ cockroachdb_certs_directory }} --ca-key={{ cockroachdb_certs_directory }}/root.ca
+      mv {{ cockroachdb_certs_directory }}/node.* "{{ cockroachdb_certs_directory }}/nodes/{{ hostvars[node].ansible_hostname }}"
+    fi
+    {% endfor %}
+  when: ca_node == hostvars[inventory_hostname]['ansible_default_ipv4']['address']
+  delegate_to: "{{ ca_node }}"
+  #no_log: true
+
+- name: Grab this node Key
+  ansible.builtin.command: "cat {{ cockroachdb_certs_directory }}/nodes/{{ hostvars[inventory_hostname].ansible_hostname }}/node.key"
+  delegate_to: "{{ ca_node }}"
+  register: node_key
+  no_log: true
+
+- name: Grab this node Crt
+  ansible.builtin.command: "cat {{ cockroachdb_certs_directory }}/nodes/{{ hostvars[inventory_hostname].ansible_hostname }}/node.crt"
+  delegate_to: "{{ ca_node }}"
+  register: node_crt
+  no_log: true
+
+- name: Grab this node CA
+  ansible.builtin.command: "cat {{ cockroachdb_certs_directory }}/ca.crt"
+  delegate_to: "{{ ca_node }}"
+  register: node_ca
+  no_log: true
+
+- name: Write certs to node
+  ansible.builtin.copy:
+    dest: "{{ cockroachdb_certs_directory }}/{{ item.key }}"
+    content: "{{ item.value }}"
+    owner: "{{ cockroachdb_user }}"
+    group: "{{ cockroachdb_group }}"
+    mode: "0600"
+  with_dict:
+    node.key: "{{ node_key.stdout }}"
+    node.crt: "{{ node_crt.stdout }}"
+    ca.crt: "{{ node_ca.stdout }}"
+  no_log: true
+
+- name: Check if we have root client cert
+  ansible.builtin.stat:
+    path: "{{ cockroachdb_certs_directory }}/client.root.crt"
+  register: client_cert
+  delegate_to: "{{ ca_node }}"
+  run_once: true
+
+- name: Create root client cert
+  ansible.builtin.command: "{{ cockroachdb_root_dir }}/cockroachdb/cockroach cert create-client root --certs-dir={{ cockroachdb_certs_directory }} --ca-key {{ cockroachdb_certs_directory }}/root.ca"
+  when: not client_cert.stat.exists
+  delegate_to: "{{ ca_node }}"
+  run_once: true
+
+# code: language=ansible

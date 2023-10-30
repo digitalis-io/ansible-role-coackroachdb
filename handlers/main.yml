@@ -1,0 +1,12 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: reload cockroachdb
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: cockroachdb
+    state: restarted
+
+# code: language=ansible

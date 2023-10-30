@@ -1,0 +1,61 @@
+---
+cockroachdb_version: 23.1.11
+cockroachdb_download_url: https://binaries.cockroachdb.com/cockroach-v{{ cockroachdb_version }}.linux-amd64.tgz
+cockroarchdb_sql_download_url: https://binaries.cockroachdb.com/cockroach-sql-v{{ cockroachdb_version }}.linux-amd64.tgz
+
+cockroachdb_use_docker: false
+
+cockroachdb_user: cockroachdb
+cockroachdb_group: cockroachdb
+cockroachdb_user_id: 8423
+cockroachdb_group_id: 8423
+
+cockroachdb_cluster_name: digitalis
+
+cockroachdb_root_dir: /opt
+cockroachdb_data_dir: /opt/cockroachdb-data
+cockroachdb_nodes: []
+
+# ie: 0.0.0.0:8080 (default)
+#     :8080
+#     127.0.0.1:8181
+cockroachdb_api_address: :8181
+
+cockroachdb_log_directory: ""
+cockroachdb_certs_directory: "/opt/cockroachdb-ssl"
+cockroachdb_self_signed_certs: true
+
+cockroachdb_nodes_group: "{{ groups['tag_Role_postgres'] }}"
+
+cockroachdb_admin_user: ansible
+cockroachdb_admin_password: changeme
+
+# Databases to ensure exist.
+cockroachdb_databases: []
+  # - name: exampledb # required; the rest are optional
+  #   lc_collate: # defaults to 'en_US.UTF-8'
+  #   lc_ctype: # defaults to 'en_US.UTF-8'
+  #   encoding: # defaults to 'UTF-8'
+  #   template: # defaults to 'template0'
+  #   login_host: # defaults to 'localhost'
+  #   login_password: # defaults to not set
+  #   login_user: # defaults to '{{ cockroachdb_user }}'
+  #   login_unix_socket: # defaults to 1st of cockroachdb_unix_socket_directories
+  #   port: # defaults to not set
+  #   owner: # defaults to cockroachdb_user
+  #   state: # defaults to 'present'
+
+# Users to ensure exist.
+cockroachdb_users: []
+# - name: jdoe #required; the rest are optional
+#   password: # defaults to not set
+#   encrypted: # defaults to not set
+#   priv: # defaults to not set
+#   role_attr_flags: # defaults to not set
+#   db: # defaults to not set
+#   login_host: # defaults to 'localhost'
+#   login_password: # defaults to not set
+#   login_user: # defaults to '{{ cockroachdb_user }}'
+#   login_unix_socket: # defaults to 1st of cockroachdb_unix_socket_directories
+#   port: # defaults to not set
+#   state: # defaults to 'present'
