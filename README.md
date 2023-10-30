@@ -26,7 +26,7 @@ Including an example of how to use your role (for instance, with variables passe
   any_errors_fatal: true
 
   roles:
-    - name: ar-cockroachdb
+    - name: ansible-role-cockroachdb
 ```
 
 License

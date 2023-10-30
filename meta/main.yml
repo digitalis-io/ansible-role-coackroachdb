@@ -3,7 +3,7 @@ galaxy_info:
   description: Simple role to install Cockroachdb
   company: Digitalis.io
 
-  issue_tracker_url: https://github.com/digitalis-io/ansible-cockroachdb
+  issue_tracker_url: https://github.com/digitalis-io/ansible-role-cockroachdb
 
   license: Apache-2.0
 
